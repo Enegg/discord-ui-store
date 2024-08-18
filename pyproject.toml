@@ -1,0 +1,69 @@
+[project]
+name = "discord-ui-store"
+version = "0.1.0"
+description = "An extension for disnake-like libraries, providing an alternative to `ui.View`s."
+authors = [{ name = "Eneg" }]
+dependencies = [
+    "attrs >= 22.1.0",            # min_len
+    "anyio >= 4.0.0",
+    "typing-extensions >= 4.4.1", # override
+]
+requires-python = ">=3.9,<4.0"
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+
+[tool.pdm]
+distribution = true
+
+[tool.pdm.dev-dependencies]
+dev = ["ruff"]
+
+[tool.pdm.build]
+includes = ["src/ui_store"]
+
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+preview = true
+explicit-preview-rules = true
+
+select = [
+    "ALL",
+    "RUF022", # sort __all__
+]
+ignore = [
+    "ARG",    # unused parameters
+    "D100",   # undocumented modules
+    "D105",   # magic methods don't need docstrings
+    "COM812", # don't require commas
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+split-on-trailing-comma = false
+extra-standard-library = ["typing_extensions"]
+
+
+[tool.pyright]
+include = ["src/ui_store"]
+exclude = ["dev"]
+pythonVersion = "3.9"
+
+typeCheckingMode = "strict"
+
+reportImportCycles = true
+
+reportUnnecessaryTypeIgnoreComment = "information"
+reportUnnecessaryIsInstance = "information"
