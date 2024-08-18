@@ -34,7 +34,7 @@ async def command(inter: disnake.CommandInteraction) -> None:
     async def my_button(inter: disnake.MessageInteraction) -> None:
         my_button.disabled = True
         store.stop()
-        await inter.response.send_message("World", components=layout)
+        await inter.response.edit_message("World", components=layout)
 
     layout = [[my_button]]
     await inter.response.send_message(components=layout)
