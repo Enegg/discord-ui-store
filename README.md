@@ -1,7 +1,13 @@
 discord-ui-store
 ================
 An extension library providing an alternative to `.ui.View`s.<br>
-Works with any discord.py fork which supports sending individual components.
+Works with discord.py forks which support sending individual components.
+
+Key features
+------------
+- Create "views" without inheritance
+- Full control of the UI layout
+- Integrates with [disnake](https://github.com/DisnakeDev/disnake)
 
 Installing
 ----------
