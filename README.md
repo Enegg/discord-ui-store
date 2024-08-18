@@ -24,8 +24,6 @@ py -3 -m pip install -U git+https://github.com/Enegg/discord-ui-store
 Example
 -------
 ```py
-import asyncio
-
 import disnake
 from disnake import ui
 from disnake.ext import commands
@@ -45,10 +43,6 @@ async def command(inter: disnake.CommandInteraction) -> None:
     layout = [[my_button]]
     await inter.response.send_message(components=layout)
 
-    try:
-        async with asyncio.timeout(60):
-            await store.listen(inter.bot.wait_for)
-
-    except TimeoutError:
+    if await store.listen(inter.bot.wait_for):
         await inter.edit_original_response(components=None)
 ```

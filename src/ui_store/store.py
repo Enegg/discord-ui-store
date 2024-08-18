@@ -69,7 +69,8 @@ class CallbackStore(Generic[InterT]):
         listener: InteractionListener[InterT],
         *,
         check: InteractionCallback[InterT, bool] = default_check,
-    ) -> None:
+        timeout: int = 180,  # noqa: ASYNC109
+    ) -> bool:
         """Run the main loop until stopped.
 
         Example
@@ -78,11 +79,7 @@ class CallbackStore(Generic[InterT]):
         layout = make_layout(store)  # create components and bind them to the store
         await inter.response.send_message(components=layout)
 
-        try:
-            async with asyncio.timeout(60):
-                await store.listen(partial(client.wait_for, "message_interaction"))
-
-        except TimeoutError:
+        if await store.listen(client.wait_for):
             await inter.edit_original_response(components=None)
         ```
 
@@ -92,17 +89,31 @@ class CallbackStore(Generic[InterT]):
             Async callable which listens for component interactions.
         check: optional
             Check whether an interaction should be propagated to the callbacks.
+        timeout: optional
+            Number of seconds since last interaction until the loop stops.
+
+        Returns
+        -------
+        bool
+            `True` on timeout, `False` after `.stop`.
         """
-        with self._cs:
-            while True:
+        self._cs.deadline = anyio.current_time() + timeout
+
+        while True:
+            with self._cs:
                 inter = await listener(
                     self.event_name, check=lambda inter: inter.data.custom_id in self._callbacks
                 )
 
-                if not await check(inter):
-                    continue
+            if self._cs.cancelled_caught:
+                return not self._cs.cancel_called
 
-                await self._callbacks[inter.data.custom_id](inter)
+            if not await check(inter):
+                continue
+
+            await self._callbacks[inter.data.custom_id](inter)
+            # don't reset the deadline for interactions rejected by the check
+            self._cs.deadline = anyio.current_time() + timeout
 
     def stop(self) -> None:
         """Stop the loop and signal to `.listen` method to return."""
