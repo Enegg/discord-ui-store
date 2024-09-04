@@ -142,23 +142,6 @@ class CallbackStore(Generic[InterT]):
 
         return catch_callback
 
-    def bind_many(
-        self, components: abc.Iterable[HasCustomID], /
-    ) -> Decorator[InterT, InteractionCallback[InterT, None]]:
-        """Register the same callback for multiple components.
-
-        Return the decorated function.
-        """
-
-        def catch_callback(
-            func: InteractionCallback[InterT, None], /
-        ) -> InteractionCallback[InterT, None]:
-            for component in components:
-                self._callbacks[component.custom_id] = func
-            return func
-
-        return catch_callback
-
     def make_id(self, *parts: str) -> str:
         """Create a custom ID with a header unique to this store.
 
