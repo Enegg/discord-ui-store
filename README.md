@@ -5,9 +5,26 @@ Works with discord.py forks which support sending individual components.
 
 Key features
 ------------
-- Create "views" without inheritance
-- Full control of the UI layout
+- Separation of concerns - `CallbackStore` manages callback registration & dispatching;<br>
+  how the components interact & are sent is left out to the user
+- No inheritance, no metaclass hacks
 - Integrates with [disnake](https://github.com/DisnakeDev/disnake)
+
+But what does "disnake-like" mean?
+----------------------------------
+So long as your API wrapper of choice supports:
+1. sending components without a view (`.send(components=[...])`)
+2. a way to listen for a specific event (`Client.wait_for`)
+3. the event mentioned above returns an object having `.data.custom_id`
+
+The extension should be interoperable with your wrapper.
+
+This is achieved by leveraging structural subtyping, rather than importing nominal types
+from a concrete wrapper.
+
+In practice, at the time being *disnake* is the only library supporting that interface,
+as it is the only wrapper which, among other things, provides a way to send components
+in a message beyond views.
 
 Installing
 ----------
