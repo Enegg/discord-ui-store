@@ -6,7 +6,7 @@ authors = [{ name = "Eneg" }]
 dependencies = [
     "attrs >= 22.1.0",            # min_len
     "anyio >= 4.0.0",
-    "typing-extensions >= 4.4.1", # override
+    "typing-extensions >= 4.4.0", # infer_variance
 ]
 requires-python = ">=3.9,<4.0"
 readme = "README.md"

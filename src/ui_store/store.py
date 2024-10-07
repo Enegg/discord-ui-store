@@ -51,11 +51,13 @@ class CallbackStore(Generic[InterT]):
     id: Final[str] = attrs.field(factory=random_str)
     """Unique ID of this object."""
 
-    _callbacks: dict[str, InteractionCallback[InterT, None]] = attrs.field(factory=dict, init=False)
+    _callbacks: dict[str, InteractionCallback[InterT, None]] = attrs.field(
+        factory=dict, init=False, eq=False
+    )
     """Mapping of `custom_id`s to callbacks of components."""
-    _cs: anyio.CancelScope = attrs.field(factory=anyio.CancelScope, init=False)
-    """CancelScope stopping the main loop by timeout or .stop call."""
-    _id_counter: int = attrs.field(default=0, init=False)
+    _cs: anyio.CancelScope = attrs.field(factory=anyio.CancelScope, init=False, eq=False)
+    """`CancelScope` stopping the main loop by timeout or .stop call."""
+    _id_counter: int = attrs.field(default=0, init=False, eq=False)
     """Counter for component `custom_id` generation."""
 
     @staticmethod
@@ -127,8 +129,6 @@ class CallbackStore(Generic[InterT]):
         Example
         -------
         ```
-        from MyDiscordLib import MessageInteraction, ui
-
         @store.bind(ui.Button(..., custom_id=store.make_id()))
         async def my_button(inter: MessageInteraction) -> None:
             my_button.disabled = True
