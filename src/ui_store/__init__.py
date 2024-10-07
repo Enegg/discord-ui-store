@@ -1,6 +1,6 @@
 """An extension for disnake-like libraries, providing an alternative to `ui.View`s."""
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 from .store import CallbackStore
 

@@ -1,6 +1,6 @@
 import os
 from collections import abc
-from typing import ClassVar, Final, Generic, Protocol
+from typing import Final, Generic, Protocol
 from typing_extensions import TypeAlias, TypeVar
 
 import anyio
@@ -29,7 +29,7 @@ Decorator: TypeAlias = abc.Callable[[InteractionCallback[InterT, None]], T]
 
 # the libraries expect `check=` to be passed via keyword
 class InteractionListener(Protocol[InterT]):
-    async def __call__(self, event: str, /, *, check: abc.Callable[[InterT], bool]) -> InterT: ...
+    async def __call__(self, *, check: abc.Callable[[InterT], bool]) -> InterT: ...
 
 
 def random_str() -> str:
@@ -46,9 +46,17 @@ class CallbackStore(Generic[InterT]):
         As such, it is not viable to embed mutable state within the ID.
     """
 
-    event_name: ClassVar[str] = "message_interaction"
+    @staticmethod
+    async def default_check(inter: HasData, /) -> bool:
+        """Interaction check which allows all interactions."""
+        await anyio.lowlevel.checkpoint()
+        return True
 
-    id: Final[str] = attrs.field(factory=random_str)
+    listener: InteractionListener[InterT]
+    """Async callable which listens for component interactions."""
+    check: InteractionCallback[InterT, bool] = default_check
+    """Check whether an interaction should be propagated to the callbacks."""
+    id: Final[str] = attrs.field(factory=random_str, kw_only=True)
     """Unique ID of this object."""
 
     _callbacks: dict[str, InteractionCallback[InterT, None]] = attrs.field(
@@ -60,19 +68,7 @@ class CallbackStore(Generic[InterT]):
     _id_counter: int = attrs.field(default=0, init=False, eq=False)
     """Counter for component `custom_id` generation."""
 
-    @staticmethod
-    async def default_check(inter: HasData, /) -> bool:
-        """Interaction check which allows all interactions."""
-        await anyio.lowlevel.checkpoint()
-        return True
-
-    async def listen(
-        self,
-        listener: InteractionListener[InterT],
-        *,
-        check: InteractionCallback[InterT, bool] = default_check,
-        timeout: int = 180,  # noqa: ASYNC109
-    ) -> bool:
+    async def listen(self, *, timeout: int = 180) -> bool:  # noqa: ASYNC109
         """Run the main loop until stopped.
 
         Example
@@ -81,16 +77,12 @@ class CallbackStore(Generic[InterT]):
         layout = make_layout(store)  # create components and bind them to the store
         await inter.response.send_message(components=layout)
 
-        if await store.listen(client.wait_for):
+        if await store.listen():
             await inter.edit_original_response(components=None)
         ```
 
         Parameters
         ----------
-        listener:
-            Async callable which listens for component interactions.
-        check: optional
-            Check whether an interaction should be propagated to the callbacks.
         timeout: optional
             Number of seconds since last interaction until the loop stops.
 
@@ -101,16 +93,17 @@ class CallbackStore(Generic[InterT]):
         """
         self._cs.deadline = anyio.current_time() + timeout
 
+        def is_own_interaction(inter: HasData, /) -> bool:
+            return inter.data.custom_id in self._callbacks
+
         while True:
             with self._cs:
-                inter = await listener(
-                    self.event_name, check=lambda inter: inter.data.custom_id in self._callbacks
-                )
+                inter = await self.listener(check=is_own_interaction)
 
             if self._cs.cancelled_caught:
                 return not self._cs.cancel_called
 
-            if not await check(inter):
+            if not await self.check(inter):
                 continue
 
             await self._callbacks[inter.data.custom_id](inter)
@@ -133,6 +126,7 @@ class CallbackStore(Generic[InterT]):
         async def my_button(inter: MessageInteraction) -> None:
             my_button.disabled = True
             await inter.response.edit_message(components=[[my_button]])
+        # my_button is now the Button passed to the decorator
         ```
         """
 
