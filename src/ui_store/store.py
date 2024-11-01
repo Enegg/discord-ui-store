@@ -1,6 +1,6 @@
 import os
 from collections import abc
-from typing import Final, Generic, Protocol
+from typing import Final, Generic, Protocol, Union
 from typing_extensions import TypeAlias, TypeVar
 
 import anyio
@@ -30,6 +30,10 @@ Decorator: TypeAlias = abc.Callable[[InteractionCallback[InterT, None]], T]
 # the libraries expect `check=` to be passed via keyword
 class InteractionListener(Protocol[InterT]):
     async def __call__(self, *, check: abc.Callable[[InterT], bool]) -> InterT: ...
+
+
+class FloatAddable(Protocol):
+    def __radd__(self, other: float, /) -> float: ...
 
 
 def random_str() -> str:
@@ -68,7 +72,7 @@ class CallbackStore(Generic[InterT]):
     _id_counter: int = attrs.field(default=0, init=False, eq=False)
     """Counter for component `custom_id` generation."""
 
-    async def listen(self, *, timeout: int = 180) -> bool:  # noqa: ASYNC109
+    async def listen(self, *, timeout: Union[int, float, FloatAddable] = 180) -> bool:  # noqa: ASYNC109
         """Run the main loop until stopped.
 
         Example
@@ -92,23 +96,26 @@ class CallbackStore(Generic[InterT]):
             `True` on timeout, `False` after `.stop`.
         """
         self._cs.deadline = anyio.current_time() + timeout
+        shield_interaction_responses = anyio.CancelScope(shield=True)
 
-        def is_own_interaction(inter: HasData, /) -> bool:
+        def check_id(inter: HasData, /) -> bool:
             return inter.data.custom_id in self._callbacks
 
         while True:
             with self._cs:
-                inter = await self.listener(check=is_own_interaction)
+                inter = await self.listener(check=check_id)
 
+            # anyio.fail_after does something similar
             if self._cs.cancelled_caught:
                 return not self._cs.cancel_called
 
-            if not await self.check(inter):
-                continue
+            with shield_interaction_responses:
+                if not await self.check(inter):
+                    continue
 
-            await self._callbacks[inter.data.custom_id](inter)
-            # don't reset the deadline for interactions rejected by the check
-            self._cs.deadline = anyio.current_time() + timeout
+                await self._callbacks[inter.data.custom_id](inter)
+                # don't reset the deadline for interactions rejected by the check
+                self._cs.deadline = anyio.current_time() + timeout
 
     def stop(self) -> None:
         """Stop the loop and signal to `.listen` method to return."""

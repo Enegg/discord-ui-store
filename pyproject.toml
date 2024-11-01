@@ -49,7 +49,9 @@ ignore = [
     "D100",   # undocumented modules
     "D105",   # undocumented dunders
     "COM812", # don't require commas
-    "PD",     # we aren't using pandas
+    "PD",     # not using pandas
+    "PYI041", # float != int | float
+    "FA100",  # don't use __future__
 ]
 
 [tool.ruff.lint.per-file-ignores]
