@@ -1,5 +1,6 @@
 import os
 from collections import abc
+from datetime import timedelta
 from typing import Final, Generic, Protocol, Union
 from typing_extensions import TypeAlias, TypeVar
 
@@ -34,6 +35,9 @@ class InteractionListener(Protocol[InterT]):
 
 class FloatAddable(Protocol):
     def __radd__(self, other: float, /) -> float: ...
+
+
+Seconds: TypeAlias = Union[int, float, timedelta, FloatAddable]
 
 
 def random_str() -> str:
@@ -72,7 +76,7 @@ class CallbackStore(Generic[InterT]):
     _id_counter: int = attrs.field(default=0, init=False, eq=False)
     """Counter for component `custom_id` generation."""
 
-    async def listen(self, *, timeout: Union[int, float, FloatAddable] = 180) -> bool:  # noqa: ASYNC109
+    async def listen(self, *, timeout: Seconds = 180) -> bool:  # noqa: ASYNC109
         """Run the main loop until stopped.
 
         Example
@@ -95,6 +99,9 @@ class CallbackStore(Generic[InterT]):
         bool
             `True` on timeout, `False` after `.stop`.
         """
+        if isinstance(timeout, timedelta):
+            timeout = timeout.total_seconds()
+
         self._cs.deadline = anyio.current_time() + timeout
         shield_interaction_responses = anyio.CancelScope(shield=True)
 
