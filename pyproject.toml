@@ -52,13 +52,16 @@ ignore = [
     "PD",     # not using pandas
     "PYI041", # float != int | float
     "FA100",  # don't use __future__
+    "INP001", # implicit namespace
+    "S101",   # asserts are fine
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "examples/**.py" = [
-    "INP001", # this *is* a namespace package
     "D10",    # it's not /public API/
-    "S101",   # asserts are fine
+]
+"static_tests/**.py" = [
+    "D10",
 ]
 
 [tool.ruff.lint.pydocstyle]

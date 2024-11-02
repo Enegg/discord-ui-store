@@ -2,7 +2,7 @@ import os
 from collections import abc
 from datetime import timedelta
 from typing import Final, Generic, Protocol, Union
-from typing_extensions import TypeAlias, TypeVar
+from typing_extensions import ParamSpec, TypeAlias, TypeVar
 
 import anyio
 import anyio.lowlevel
@@ -22,13 +22,14 @@ class HasData(Protocol):
 
 
 T = TypeVar("T", infer_variance=True)
+P = ParamSpec("P")
 ItemT = TypeVar("ItemT", bound=HasCustomID, infer_variance=True)
 InterT = TypeVar("InterT", bound=HasData, infer_variance=True)
-InteractionCallback: TypeAlias = abc.Callable[[InterT], abc.Awaitable[T]]
-Decorator: TypeAlias = abc.Callable[[InteractionCallback[InterT, None]], T]
+AsyncFunc: TypeAlias = abc.Callable[P, abc.Awaitable[T]]
+Decorator: TypeAlias = abc.Callable[[AsyncFunc[P, None]], T]
 
 
-# the libraries expect `check=` to be passed via keyword
+# we pass `check` as keyword
 class InteractionListener(Protocol[InterT]):
     async def __call__(self, *, check: abc.Callable[[InterT], bool]) -> InterT: ...
 
@@ -62,12 +63,12 @@ class CallbackStore(Generic[InterT]):
 
     listener: InteractionListener[InterT]
     """Async callable which listens for component interactions."""
-    check: InteractionCallback[InterT, bool] = default_check
+    check: AsyncFunc[[InterT], bool] = default_check
     """Check whether an interaction should be propagated to the callbacks."""
     id: Final[str] = attrs.field(factory=random_str, kw_only=True)
     """Unique ID of this object."""
 
-    _callbacks: dict[str, InteractionCallback[InterT, None]] = attrs.field(
+    _callbacks: dict[str, AsyncFunc[[InterT], None]] = attrs.field(
         factory=dict, init=False, eq=False
     )
     """Mapping of `custom_id`s to callbacks of components."""
@@ -128,7 +129,7 @@ class CallbackStore(Generic[InterT]):
         """Stop the loop and signal to `.listen` method to return."""
         self._cs.cancel()
 
-    def bind(self, component: ItemT, /) -> Decorator[InterT, ItemT]:
+    def bind(self, component: ItemT, /) -> Decorator[[InterT], ItemT]:
         """Register a callback for the component.
 
         Assigns the component under the decorated function's name.
@@ -144,9 +145,38 @@ class CallbackStore(Generic[InterT]):
         ```
         """
 
-        def catch_callback(func: InteractionCallback[InterT, None], /) -> ItemT:
+        def catch_callback(func: AsyncFunc[[InterT], None], /) -> ItemT:
             self._callbacks[component.custom_id] = func
             return component
+
+        return catch_callback
+
+    # this could be a nice use case for TypeVarTuples if they could be constrained...
+    def bind_many(self, *components: ItemT) -> Decorator[[int, InterT], tuple[ItemT, ...]]:
+        """Register a callback shared by multiple components.
+
+        The callback receives the index of a component that invoked it as the first param.
+
+        Assigns a tuple of the components under the decorated function's name.
+
+        Example
+        -------
+        ```
+        @store.bind_many(
+            ui.Button(..., custom_id=store.make_id()),
+            ui.Button(..., custom_id=store.make_id())
+        )
+        async def buttons(index: int, inter: MessageInteraction) -> None:
+            button = buttons[index]
+            ...
+        # buttons is now a tuple of components passed to the decorator
+        """
+        from functools import partial
+
+        def catch_callback(func: AsyncFunc[[int, InterT], None], /) -> tuple[ItemT, ...]:
+            for i, component in enumerate(components):
+                self._callbacks[component.custom_id] = partial(func, i)
+            return components
 
         return catch_callback
 
