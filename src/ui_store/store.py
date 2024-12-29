@@ -1,3 +1,4 @@
+import math
 import os
 from collections import abc
 from datetime import timedelta
@@ -28,9 +29,9 @@ InteractionCallback: TypeAlias = abc.Callable[[InterT], abc.Awaitable[T]]
 Decorator: TypeAlias = abc.Callable[[InteractionCallback[InterT, None]], T]
 
 
-# the libraries expect `check=` to be passed via keyword
+# disnake expects `check=` to be passed via keyword, lets follow that
 class InteractionListener(Protocol[InterT]):
-    async def __call__(self, *, check: abc.Callable[[InterT], bool]) -> InterT: ...
+    def __call__(self, *, check: abc.Callable[[InterT], bool]) -> abc.Awaitable[InterT]: ...
 
 
 class FloatAddable(Protocol):
@@ -99,15 +100,22 @@ class CallbackStore(Generic[InterT]):
         bool
             `True` on timeout, `False` after `.stop`.
         """
+        # store objects are not reusable; CancelScope.deadline == inf on first creation
+        if not math.isinf(self._cs.deadline):
+            msg = "This store is already listening for interactions elsewhere"
+            raise RuntimeError(msg)
+
         if isinstance(timeout, timedelta):
             timeout = timeout.total_seconds()
 
         self._cs.deadline = anyio.current_time() + timeout
-        shield_interaction_responses = anyio.CancelScope(shield=True)
+        response_shield = anyio.CancelScope(shield=True)
 
         def check_id(inter: HasData, /) -> bool:
-            return inter.data.custom_id in self._callbacks
+            return inter.data.custom_id.startswith(self.id)
 
+        # NOTE: self._cs cannot span the entire loop despite the shield;
+        # once the deadline expires, resetting it does not "uncancel" the scope
         while True:
             with self._cs:
                 inter = await self.listener(check=check_id)
@@ -116,13 +124,13 @@ class CallbackStore(Generic[InterT]):
             if self._cs.cancelled_caught:
                 return not self._cs.cancel_called
 
-            with shield_interaction_responses:
+            with response_shield:
                 if not await self.check(inter):
                     continue
 
                 await self._callbacks[inter.data.custom_id](inter)
-                # don't reset the deadline for interactions rejected by the check
-                self._cs.deadline = anyio.current_time() + timeout
+            # don't reset the deadline for interactions rejected by the check
+            self._cs.deadline = anyio.current_time() + timeout
 
     def stop(self) -> None:
         """Stop the loop and signal to `.listen` method to return."""
